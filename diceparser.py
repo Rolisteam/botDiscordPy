@@ -153,7 +153,7 @@ async def on_message(message):
                         logger.info("Command: "+line)
                         normalCmd=False
                         await rollDice(line,message,my_bot)
-            elif(normalCmd):
+            if(normalCmd):
                 logger.info("Command: "+command)                
                 await rollDice(command,message,my_bot)
 
