@@ -1,0 +1,7 @@
+*.log
+*.log.gz
+*.json
+*.log.*
+*.txt
+*.pyc
+__pycache__
