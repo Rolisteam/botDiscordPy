@@ -242,7 +242,6 @@ async def manageAlias(message):
 async def rollDice(command,message,bot):
     idServer=str(message.server.id)
     logger = logging.getLogger('discord')
-    logger.info("inside RollDice:"+command)
     kill = lambda process: process.kill()
     cmd = ['dice','-b',command]
     if idServer in AllMacro:
@@ -279,7 +278,7 @@ async def on_ready():
     print(my_bot.user.name)
     print(my_bot.user.id)
     print('------')
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers))))
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers)))+" serverCount:"+str(len(self.bot.guilds)))
     #t.start()
 
 @my_bot.event
