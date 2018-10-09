@@ -1,0 +1,19 @@
+[Unit]
+Description=DiceParser
+After=network-online.target
+ 
+[Service]
+Type=forking
+ 
+User=renaud
+Group=renaud
+ 
+ExecStart=/home/renaud/application/mine/discord-python/start-discordbot.sh
+ 
+Restart=on-failure
+ 
+# Configures the time to wait before service is stopped forcefully.
+TimeoutStopSec=300
+ 
+[Install]
+WantedBy=multi-user.target
