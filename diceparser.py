@@ -19,6 +19,7 @@ import os.path
 
 import dbl
 from discord.ext import commands
+from cogs import api
 
 import aiohttp
 import asyncio
@@ -126,7 +127,7 @@ async def sendImageMessage(bot,message,data):
     await bot.send_file(message.channel, f, filename="result.png",content="")
 
 
-async def manageMacro(message,bot):
+async def manageMacro(message,textmsg,bot):
     idServer=str(message.server.id)
     macroPattern=""
     macroCmd=""
@@ -141,10 +142,10 @@ async def manageMacro(message,bot):
     showlistMacro = False
     idToRemove=-1
 
-    for line in message.content.splitlines():
+    for line in textmsg.splitlines():
         tab=line.split(' ')
         if(not addMacro and not removeMacro):
-            if(tab[0] == "!macro"):
+            if(tab[0] == "macro"):
                 if(tab[1] == "rm"):
                     removeMacro=True
                     idToRemove=tab[2]
@@ -172,11 +173,12 @@ async def manageMacro(message,bot):
         macros.append(macro)
 
     if(showlistMacro):
-        lines=""
+        lines="```"
         id = 0
         for i in macros:
             lines+="id: {} Pattern: {} Command: {} Regexp: {}\n".format(id,i["pattern"],i["cmd"],i["regexp"])
             id+=1
+        lines+="```"
         if(id>0):
             await bot.send_message(message.channel, lines)
 
@@ -193,7 +195,7 @@ async def manageMacro(message,bot):
             AllMacro[idServer]="macro_{}.json".format(idServer)
 
 
-async def manageAlias(message):
+async def manageAlias(message,textmsg):
     idServer=str(message.server.id)
     aliases={}
     commands=[]
@@ -201,10 +203,10 @@ async def manageAlias(message):
     addAlias=False
     removeAlias=False
     firstLine=True
-    for line in message.content.splitlines():
+    for line in textmsg.splitlines():
         tab=line.split(' ')
         if(not addAlias and not removeAlias and firstLine):
-            if(tab[0] == "!alias"):
+            if(tab[0] == "alias"):
                 if(tab[1] == "rm"):
                     removeAlias=True
                     try:
@@ -271,6 +273,9 @@ async def rollDice(command,message,bot):
     finally:
         my_timer.cancel()
 
+async def manageSupport(message, bot):
+    await bot.send_message(message.channel, "You want to help ? go to: https://liberapay.com/obiwankennedy/donate and support my developer")
+
 ## Callback
 @my_bot.event
 async def on_ready():
@@ -278,7 +283,10 @@ async def on_ready():
     print(my_bot.user.name)
     print(my_bot.user.id)
     print('------')
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers)))+" serverCount:"+str(len(self.bot.guilds)))
+    print('id: {} count: {}'.format(current_shard_id,shardCount))
+    await my_bot.change_presence(game=discord.Game(name = '!support !help')) #, url = 'https://liberapay.com/obiwankennedy/donate', type = 1))
+    api.setup(my_bot, current_shard_id, shardCount)
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers))))
     #t.start()
 
 @my_bot.event
@@ -295,12 +303,17 @@ async def on_message(message):
         textmsg = message.content
         if textmsg.startswith(prefix) and message.author != my_bot.user:
             textmsg= textmsg[len(prefix):].strip()
-            if textmsg.startswith('play') or textmsg.startswith('skip'):
+            if textmsg.startswith('play') or textmsg.startswith('skip') or textmsg.startswith('stop'):
                         return
             if textmsg.startswith('alias'):
-                await manageAlias(message)
+                logger.info("alias")
+                await manageAlias(message,textmsg)
             if textmsg.startswith('macro'):
-                await manageMacro(message,my_bot)
+                logger.info("macro")
+                await manageMacro(message,textmsg,my_bot)
+            if textmsg.startswith('support'):
+                logger.info("Support asked")
+                await manageSupport(message, my_bot)
             if textmsg.startswith('prefix'):
                 logger.info("Confix prefix")
                 await managePrefix(idServer,textmsg,message,my_bot)
