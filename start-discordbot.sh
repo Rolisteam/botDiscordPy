@@ -11,19 +11,29 @@ RunInstance() {
 }
 
 
-total=4
+total=15
 
 RunInstance $total 0 &
 RunInstance $total 1 &
 RunInstance $total 2 &
 RunInstance $total 3 &
+RunInstance $total 4 &
+RunInstance $total 5 &
+RunInstance $total 6 &
+RunInstance $total 7 &
+RunInstance $total 8 &
+RunInstance $total 9 &
+RunInstance $total 10 &
+RunInstance $total 11 &
+RunInstance $total 12 &
+RunInstance $total 13 &
+RunInstance $total 14 &
 
 
 
 
-#while [ 1 ]
+let lastId=total-1
+#for i in `seq 0 $lastId`
 #do
-#	./diceparser.py --shardCount 3 0 &
-#    ./diceparser.py --shardCount 3 1 &
-#    ./diceparser.py --shardCount 3 2
+#	RunInstance $total i &
 #done
