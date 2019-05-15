@@ -11,7 +11,7 @@ RunInstance() {
 }
 
 
-total=15
+total=20
 
 RunInstance $total 0 &
 RunInstance $total 1 &
@@ -28,6 +28,11 @@ RunInstance $total 11 &
 RunInstance $total 12 &
 RunInstance $total 13 &
 RunInstance $total 14 &
+RunInstance $total 15 &
+RunInstance $total 16 &
+RunInstance $total 17 &
+RunInstance $total 18 &
+RunInstance $total 19 &
 
 
 
