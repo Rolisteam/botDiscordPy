@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.6
+# -*- coding: utf-8 -*-
 
 import discord
 import subprocess
@@ -15,7 +16,8 @@ import io
 import argparse
 import sys
 import os.path
-
+import configparser
+from database import DataRetriver
 
 import dbl
 from discord.ext import commands
@@ -39,15 +41,13 @@ print(str(current_shard_id)+" "+str(shardCount));
 
 logger = logging.getLogger('discord')
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='/opt/document/log/discord.log', encoding='utf-8', mode='a')
+handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='a')
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 logger.addHandler(handler)
 
 secs=3600*24
-filename="alias.json"
-macroFileName="/home/renaud/application/mine/discord-python/macros/"
+pwd="/home/renaud/application/mine/discord-python/"
 description = '''DiceParser provides a complete system to run dice commands.'''
-prefixFile="prefix.json"
 my_bot = Bot(shard_id=current_shard_id,shard_count=shardCount,command_prefix='')
 #(command_prefix='',description=description,shard_id=0,shard_count=1)
 
@@ -61,36 +61,21 @@ messages = ["Hello, this bot is part of Rolisteam project. To ensure long-term v
 
 
 ## INIT
-AllAliases={}
-AllMacro={}
-PrefixByServer={}
+config = configparser.ConfigParser()
+config.read(pwd+"config.conf")
 
-
-
-if  os.path.exists(filename):
-    with open(filename, 'r') as f:
-        try:
-            AllAliases = json.load(f)
-        except:
-            pass
-    with open(prefixFile, 'r') as fp:
-        try:
-            PrefixByServer = json.load(fp)
-        except:
-            pass
-    for fileMacro in os.listdir(macroFileName):
-        idJson = fileMacro[6:-5]
-        print(idJson)
-        AllMacro[idJson]=fileMacro
-
+database = DataRetriver.DataRetriver(config['DEFAULT']['ADDRESS'], config['DEFAULT']['LOGIN'], config['DEFAULT']['PASSWORD'], config['DEFAULT']['BASE'])
 
 
 def getPrefix(serverId):
-    if(serverId in PrefixByServer):
-        return PrefixByServer[serverId]
-    return "!"
+    global database
+    prefix = database.getPrefix(serverId)
+    if len(prefix)==0:
+        prefix='!'
+    return prefix
 
 async def managePrefix(idserver, textmsg, message, bot ):
+    global database
     # !prefix set roll
     try:
         array=textmsg.split(' ')
@@ -98,14 +83,9 @@ async def managePrefix(idserver, textmsg, message, bot ):
         if(len(array)==3):
             if(array[0] == "prefix"):
                 if(array[1] == "set"):
-                    PrefixByServer[idserver]=array[2]
-
-
-        with open(prefixFile, 'w') as outfile:
-            json.dump(PrefixByServer,outfile,indent=4)
-        await bot.send_message(message.channel, "[Prefix]New prefix definition is done!")
+                    database.setPrefix(serverId, array[2])
     except:
-        await bot.send_message(message.channel, "[Prefix]Something goes wrong")
+        await message.channel.send( "[Prefix]Something goes wrong")
 
 
 async def manageAdsMessage(message):
@@ -115,7 +95,7 @@ async def manageAdsMessage(message):
             index = random.randint(0,len(messages)-1)
             ads = messages[index]
             logger.info("Ads:"+ads+" channel:"+message.channel.name)
-            await bot.send_message(message.channel, ads)
+            await message.channel.send(ads)
             channels[message.channel.id] = 0
     else :
         channels[message.channel.id] = 0
@@ -124,26 +104,20 @@ async def sendImageMessage(bot,message,data):
     decodedData=base64.b64decode(data,validate=True)
     f = io.BytesIO(decodedData)
     logger.info("data: "+data)
-    await bot.send_file(message.channel, f, filename="result.png",content="")
+    await message.channel.send( f, file="result.png",content="")
 
 
 async def manageMacro(message,textmsg,bot):
-    idServer=str(message.server.id)
-    macroPattern=""
-    macroCmd=""
-    filename = "{}macro_{}.json".format(macroFileName,idServer)
-    macros = []
-    if os.path.isfile(filename):
-        with open(filename) as f:
-            macros = json.load(f)
+    global database
+    idServer=str(message.guild.id)
     macroRegExp=False
     addMacro=False
     removeMacro=False
     showlistMacro = False
     idToRemove=-1
 
-
     tab=textmsg.split(' ')
+    index=-1
     if(not addMacro and not removeMacro):
        if(tab[0] == "macro"):
            if(tab[1] == "rm"):
@@ -151,6 +125,14 @@ async def manageMacro(message,textmsg,bot):
                idToRemove=tab[2]
            elif(tab[1] == "list"):
                showlistMacro=True
+           elif(tab[1][0] == ":"):
+               strg=str(tab[1])
+               print(strg)
+               showlistMacro=True
+               try:
+                   index = int(strg[1:])
+               except:
+                   pass
            else:
                addMacro=True
                size=len(tab)
@@ -175,18 +157,15 @@ async def manageMacro(message,textmsg,bot):
                    macroCmd=macroCmd.strip()
                except IndexError:
                    addMacro=False
-                   await bot.send_message(message.channel, "Error in your add Macro Command: no command")
+                   await message.channel.send("Error in your add Macro Command: no command")
 
 
     if(addMacro):
-        macro = {}
-        macro["pattern"]=macroName
-        macro["cmd"]=macroCmd
-        macro["regexp"]=macroRegExp
-        macro["comment"]=""
-        macros.append(macro)
+        database.addMacro(idServer, macroName,macroCmd,macroRegExp,"")
+        #macros.append(macro)
 
     if(showlistMacro):
+        macros=json.loads(database.showMacro(idServer, index))
         lines="```"
         id = 0
         for i in macros:
@@ -194,26 +173,20 @@ async def manageMacro(message,textmsg,bot):
             id+=1
         lines+="```"
         if(id>0):
-            await bot.send_message(message.channel, lines)
+            await message.channel.send(lines)
         else:
-            await bot.send_message(message.channel, "No recorded macro for this server")
-
+            await message.channel.send("No recorded macro for this server")
 
     if(removeMacro):
         try:
-            del macros[int(idToRemove)]
+            database.removeMacro(idServer,int(idToRemove))
         except IndexError:
-            await bot.send_message(message.channel, "Error in your remove Macro Command")
-
-
-    if(removeMacro or addMacro):
-        with open(filename, 'w') as outfile:
-            json.dump(macros,outfile,indent=4)
-            AllMacro[idServer]="macro_{}.json".format(idServer)
+            await message.channel.send("Error in your remove Macro Command")
 
 
 async def manageAlias(message,textmsg,bot):
-    idServer=str(message.server.id)
+    global database
+    idServer=str(message.guild.id)
     aliases={}
     commands=[]
     aliasName=""
@@ -249,7 +222,7 @@ async def manageAlias(message,textmsg,bot):
         firstLine=False
 
     if(showlistAlias):
-        val = AllAliases[idServer]
+        val = database.showAlias(idServer)
         lines="```"
         id = 0
         for i in val:
@@ -262,32 +235,29 @@ async def manageAlias(message,textmsg,bot):
             id+=1
         lines+="```"
         if(id>0):
-            await bot.send_message(message.channel, lines)
+            await message.channel.send(lines)
         else:
-            await bot.send_message(message.channel, "No recorded macro for this server")
+            await message.channel.send("No recorded macro for this server")
         return
 
-    if( idServer not in AllAliases):
-        AllAliases.update({str(idServer):{}})
-
-    val = AllAliases[idServer]
+    #if( idServer not in AllAliases):
+    #    AllAliases.update({str(idServer):{}})
     if(addAlias):
-        val.update({str(aliasName):commands})
+        database.addAlias(idServer,str(aliasName),commands)
     elif(removeAlias):
-        del val[aliasName]
-
-    with open(filename, 'w') as outfile:
-        json.dump(AllAliases,outfile,indent=4)
+        database.removeAlias(idServer,aliasName)
 
 
 async def rollDice(command,message,bot):
-    idServer=str(message.server.id)
+    global database
+    idServer=str(message.guild.id)
     logger = logging.getLogger('discord')
     kill = lambda process: process.kill()
+    macros=database.getJsonMacro(idServer)
     cmd = ['dice','-b',command]
-    if idServer in AllMacro:
-        cmd.append('-a');
-        cmd.append("{}{}".format(macroFileName,AllMacro[idServer]));
+    cmd.append('--alias-data')
+    cmd.append("{}".format(macros))
+    print(cmd)
     roll = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     my_timer = Timer(5, roll.kill)
     try:
@@ -299,7 +269,7 @@ async def rollDice(command,message,bot):
         if (rc == 0):
             logger.info("cmd: "+str(command))
             if(stdout.endswith("```")):
-                await bot.send_message(message.channel, stdout)
+                await message.channel.send(stdout)
             else:
                 await sendImageMessage(bot,message,stdout)
             await manageAdsMessage(message)
@@ -317,10 +287,10 @@ async def rollDice(command,message,bot):
         my_timer.cancel()
 
 async def manageSupport(message, bot):
-    await bot.send_message(message.channel, "You want to help ? Go to:\n https://liberapay.com/obiwankennedy/donate \nor\n https://www.twitch.tv/rolisteam and support my development")
+    await message.channel.send("You want to help ? Go to:\n https://liberapay.com/obiwankennedy/donate \nor\n https://www.twitch.tv/rolisteam and support my development")
 
 async def manageVote(message, bot):
-    await bot.send_message(message.channel, "Vote for Diceparser! go to: https://discordbots.org/bot/279722369260453888/vote")
+    await message.channel.send("Vote for Diceparser! go to: https://discordbots.org/bot/279722369260453888/vote")
 ## Callback
 @my_bot.event
 async def on_ready():
@@ -329,10 +299,11 @@ async def on_ready():
     print(my_bot.user.id)
     print('------')
     print('id: {} count: {}'.format(current_shard_id,shardCount))
-    await my_bot.change_presence(game=discord.Game(name = '!support !help !vote')) #, url = 'https://liberapay.com/obiwankennedy/donate', type = 1))
+    game = discord.Game("!support !help !vote")
+    await my_bot.change_presence(status=discord.Status.idle, activity=game)
+
     api.setup(my_bot, current_shard_id, shardCount)
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers))))
-    #t.start()
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
 
 @my_bot.event
 async def on_read():
@@ -340,19 +311,20 @@ async def on_read():
 
 @my_bot.event
 async def on_server_join(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers))))
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
 
 @my_bot.event
 async def on_server_remove(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.servers))))
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
 
 
 @my_bot.event
 async def on_message(message):
+    global database
     logger = logging.getLogger('discord')
     idServer=""
-    if(message.server is not None):
-        idServer = str(message.server.id)
+    if(message.guild is not None):
+        idServer = str(message.guild.id)
         prefix = getPrefix(idServer)
         textmsg = message.content
         if textmsg.startswith(prefix) and message.author != my_bot.user:
@@ -377,27 +349,27 @@ async def on_message(message):
             else:
                 command = textmsg
                 normalCmd=True
-                if(len(idServer) >0 and idServer in AllAliases):
-                    val = AllAliases[idServer]
-                    if(command in val):
-                        cmds=val[command]
-                        for line in cmds:
-                            if(line.startswith('!')):
-                                line = line[1:]
-                            logger.info("Saved Command: "+line)
-                            normalCmd=False
-                            await rollDice(line,message,my_bot)
-                if(normalCmd):
+                cmds=database.getAliases(idServer, command)
+                if(cmds == None):
                     await rollDice(command,message,my_bot)
+                else:
+                    for line in cmds:
+                        if(line.startswith('!')):
+                            line = line[1:]
+                        logger.info("Saved Command: "+line)
+                        normalCmd=False
+                        await rollDice(line,message,my_bot)
+
 
 
 #Prod
 #try:
-my_bot.run("Mjc5NzIyMzY5MjYwNDUzODg4.DzBGCA.QjJAGewTZr7eVovN18Gxvu2QnAM")
+#my_bot.run(config['DEFAULT']['PKEY'])
+my_bot.run(config['DEFAULT']['PKEY_DEV'])
 #except:
 #    msgError = sys.exc_info()
 #    logger.info("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" cmd:"+str(command))
 
 
 #Debug
-#my_bot.run("MzkxMzAxNDU2MjMxMTM3Mjky.DRWrew.1LjVb2w702Mtu9fURpU64yGlTyM")
+#my_bot.run("")
