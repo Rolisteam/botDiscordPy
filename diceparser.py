@@ -17,6 +17,7 @@ import argparse
 import sys
 import os.path
 import configparser
+import tempfile
 
 import dbl
 from discord.ext import commands
@@ -26,22 +27,30 @@ import aiohttp
 import asyncio
 import logging
 
+
+logger = logging.getLogger('discord')
+
 parser = argparse.ArgumentParser()
-parser.add_argument("shard_id", help="current proccess shard_id",type=int)
+#parser.add_argument("shard_id", help="current proccess shard_id",type=int)
 parser.add_argument("-c","--shardCount", help="max shard", type=int)
 args = parser.parse_args()
 Testing=True
-current_shard_id=args.shard_id
+#current_shard_id=args.shard_id
 shardCount = args.shardCount
 discordMsgLimit=2000
 #shardCount= 3
 
-print(str(current_shard_id)+" "+str(shardCount));
+logger.info("Total Shard: "+str(shardCount));
 #sys.exit(0)
 
 logger = logging.getLogger('discord')
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='/opt/document/log/discord.log', encoding='utf-8', mode='a')
+
+if(Testing):
+    handler = logging.FileHandler(filename='/opt/document/log/discord_test.log', encoding='utf-8', mode='a')
+else:
+    handler = logging.FileHandler(filename='/opt/document/log/discord.log', encoding='utf-8', mode='a')
+
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 logger.addHandler(handler)
 
@@ -85,7 +94,6 @@ if  os.path.exists(filename):
             pass
     for fileMacro in os.listdir(macroFileName):
         idJson = fileMacro[6:-5]
-        print(idJson)
         AllMacro[idJson]=fileMacro
 
 
@@ -99,7 +107,6 @@ async def managePrefix(idserver, textmsg, message, bot ):
     # !prefix set roll
     try:
         array=textmsg.split(' ')
-        print(array)
         if(len(array)==3):
             if(array[0] == "prefix"):
                 if(array[1] == "set"):
@@ -119,7 +126,6 @@ async def manageAdsMessage(message):
         if(channels[message.channel.id] == 1000):
             index = random.randint(0,len(messages)-1)
             ads = messages[index]
-            logger.info("Ads:"+ads+" channel:"+message.channel.name)
             await message.channel.send(ads)
             channels[message.channel.id] = 0
     else :
@@ -129,7 +135,7 @@ async def sendImageMessage(bot,message,data):
     decodedData=base64.b64decode(data,validate=True)
     f = io.BytesIO(decodedData)
     logger.info("data: "+data)
-    await message.channel.send( f, file="result.png",content="")
+    await message.channel.send(file=discord.File(f,"result.png"))
 
 
 async def manageMacro(message,textmsg,bot):
@@ -159,7 +165,6 @@ async def manageMacro(message,textmsg,bot):
                showlistMacro=True
            elif(tab[1][0] == ":"):
                strg=str(tab[1])
-               print(strg)
                showlistMacro=True
                try:
                    index = int(strg[1:])
@@ -185,10 +190,10 @@ async def manageMacro(message,textmsg,bot):
                    macroCmd=""
                    for i in range(2, size):
                        macroCmd += " "+tab[i]
-                       print("macro:"+macroCmd)
                    macroCmd=macroCmd.strip()
                except IndexError:
                    addMacro=False
+                   logger.error("Error:  add macro Command")
                    await message.channel.send("Error in your add Macro Command: no command")
 
 
@@ -199,10 +204,6 @@ async def manageMacro(message,textmsg,bot):
         macro["regexp"]=macroRegExp
         macro["comment"]=""
         macros.append(macro)
-	if(count == 1):
-            await message.channel.send("Macro has been added!")
-        else:
-            await message.channel.send("Faillure: Macro can't be added!")
 
     if(showlistMacro):
         lines="```"
@@ -223,6 +224,7 @@ async def manageMacro(message,textmsg,bot):
         try:
             del macros[int(idToRemove)]
         except IndexError:
+            logger.error("Error in your remove Macro Command")
             await message.channel.send( "Error in your remove Macro Command")
 
 
@@ -230,6 +232,10 @@ async def manageMacro(message,textmsg,bot):
         with open(filename, 'w') as outfile:
             json.dump(macros,outfile,indent=4)
             AllMacro[idServer]="macro_{}.json".format(idServer)
+            if(removeMacro):
+                await message.channel.send("Macro has been removed!")
+            else:
+                await message.channel.send("Macro has benn added!")
 
 
 async def manageAlias(message,textmsg,bot):
@@ -250,7 +256,7 @@ async def manageAlias(message,textmsg,bot):
                     try:
                         aliasName=tab[2]
                     except IndexError:
-                        print("error index in alias")
+                        logger.error("error index in alias")
                 elif(tab[1] == "list"):
                     showlistAlias=True
                 else:
@@ -276,7 +282,6 @@ async def manageAlias(message,textmsg,bot):
             if len(i) == 0:
                 return
             cmds=val[i]
-            print(cmds)
 
             lines+="id: {} Pattern: {}\nCommand:\n{}\n\n".format(id,i,"\n".join(cmds))
             id+=1
@@ -313,8 +318,6 @@ async def rollDice(command,message,bot):
     try:
         my_timer.start()
         stdout, stderr = roll.communicate()
-        print(stdout)
-        print(stderr)
         rc = roll.returncode
         if (rc == 0):
             logger.info("cmd: "+str(command))
@@ -324,15 +327,15 @@ async def rollDice(command,message,bot):
                 await sendImageMessage(bot,message,stdout)
             await manageAdsMessage(message)
         elif(rc != 1):
-            logger.info("command FAIL: "+str(command)+" returncode:"+str(rc))
+            logger.error("command FAIL: "+str(command)+" returncode:"+str(rc))
     except OSError as inst:
-        logger.info(type(inst))    # the exception instance
-        logger.info(inst)          # __str__ allows args to be printed directly,
-        logger.info("OSError error: "+str(sys.exc_info()[0])+" cmd:"+str(command))
+        logger.error(type(inst))    # the exception instance
+        logger.error(inst)          # __str__ allows args to be printed directly,
+        logger.error("OSError error: "+str(sys.exc_info()[0])+" command:"+str(command))
         #await client.send_message(message.channel, "Error: your command took too much time")
     except:
         msgError = sys.exc_info()
-        logger.info("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" cmd:"+str(command))
+        logger.error("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" command:"+str(command))
     finally:
         my_timer.cancel()
 
@@ -344,28 +347,26 @@ async def manageVote(message, bot):
 ## Callback
 @client.event
 async def on_ready():
-    print('Logged in as')
-    print(client.user.name)
-    print(client.user.id)
-    print('------')
-    print('id: {} count: {}'.format(current_shard_id,shardCount))
+    logger.info('Logged in as')
+    logger.info('------')
+    logger.info('count: {}'.format(shardCount))
     game = discord.Game("!support !help !vote")
     await client.change_presence(status=discord.Status.idle, activity=game)
     if not Testing:
         api.setup(client)
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
+    logger.info("#### Server count (shard): "+str(len(list(client.guilds))))
 
 @client.event
 async def on_read():
-    print("Client logged in")
+    logger.info("Client logged in")
 
 @client.event
 async def on_server_join(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
+    logger.info("#### Server count : "+str(len(list(client.guilds))))
 
 @client.event
 async def on_server_remove(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
+    logger.info("#### Server count : "+str(len(list(client.guilds))))
 
 
 @client.event
@@ -405,7 +406,6 @@ async def on_message(message):
                         for line in cmds:
                             if(line.startswith('!')):
                                 line = line[1:]
-                            logger.info("Saved Command: "+line)
                             normalCmd=False
                             await rollDice(line,message,client)
                 if(normalCmd):
@@ -417,4 +417,3 @@ if Testing:
     client.run(config['DEFAULT']['PKEY_DEV'])
 else:
     client.run(config['DEFAULT']['PKEY'])
-

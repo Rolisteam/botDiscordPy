@@ -6,7 +6,9 @@ cd /home/renaud/application/mine/discord-python/
 RunInstance() {
     while [ 1 ]
     do
+        echo "Shard $2 about to be started" > /opt/document/log/log_shard$2.log
         ./diceparser.py --shardCount $1 $2
+        echo "Shard $2 has died - its pid is: $!" >> /opt/document/log/log_shard$2.log
         sleep 5m
     done
 }
