@@ -99,12 +99,15 @@ if  os.path.exists(filename):
 
 
 def getPrefix(serverId):
+    logger = logging.getLogger('discord')
+    logger.debug("Before getPrefix")
     if(serverId in PrefixByServer):
         return PrefixByServer[serverId]
     return "!"
 
 async def managePrefix(idserver, textmsg, message, bot ):
-    # !prefix set roll
+    logger = logging.getLogger('discord')
+    logger.debug("Before managePrefix")
     try:
         array=textmsg.split(' ')
         if(len(array)==3):
@@ -121,6 +124,8 @@ async def managePrefix(idserver, textmsg, message, bot ):
 
 
 async def manageAdsMessage(message):
+    logger = logging.getLogger('discord')
+    logger.debug("Before manageAdsMessage")
     if (message.channel.id in channels):
         channels[message.channel.id] += 1
         if(channels[message.channel.id] == 1000):
@@ -132,13 +137,16 @@ async def manageAdsMessage(message):
         channels[message.channel.id] = 0
 
 async def sendImageMessage(bot,message,data):
+    logger = logging.getLogger('discord')
+    logger.debug("Before sendImageMessage")
     decodedData=base64.b64decode(data,validate=True)
     f = io.BytesIO(decodedData)
-    logger.info("data: "+data)
     await message.channel.send(file=discord.File(f,"result.png"))
 
 
 async def manageMacro(message,textmsg,bot):
+    logger = logging.getLogger('discord')
+    logger.debug("Before manageMacro")
     global discordMsgLimit
     idServer=str(message.guild.id)
     macroPattern=""
@@ -239,6 +247,8 @@ async def manageMacro(message,textmsg,bot):
 
 
 async def manageAlias(message,textmsg,bot):
+    logger = logging.getLogger('discord')
+    logger.debug("Before manageAlias")
     idServer=str(message.guild.id)
     aliases={}
     commands=[]
@@ -306,8 +316,9 @@ async def manageAlias(message,textmsg,bot):
 
 
 async def rollDice(command,message,bot):
-    idServer=str(message.guild.id)
     logger = logging.getLogger('discord')
+    logger.debug("Before Roll Dice")
+    idServer=str(message.guild.id)
     kill = lambda process: process.kill()
     cmd = ['xvfb-run','dice','-b',command]
     if idServer in AllMacro:
@@ -352,8 +363,7 @@ async def on_ready():
     logger.info('count: {}'.format(shardCount))
     game = discord.Game("!support !help !vote")
     await client.change_presence(status=discord.Status.idle, activity=game)
-    if not Testing:
-        api.setup(client)
+    #api.setup(client)
     logger.info("#### Server count (shard): "+str(len(list(client.guilds))))
 
 @client.event
