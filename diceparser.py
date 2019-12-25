@@ -315,20 +315,19 @@ async def manageAlias(message,textmsg,bot):
         json.dump(AllAliases,outfile,indent=4)
 
 
+
 async def rollDice(command,message,bot):
     logger = logging.getLogger('discord')
-    logger.debug("Before Roll Dice")
+    logger.debug('roll dice')
     idServer=str(message.guild.id)
     kill = lambda process: process.kill()
-    cmd = ['xvfb-run','dice','-b',command]
+    cmd = ['xvfb-run','--auto-servernum','dice','-b',command]
     if idServer in AllMacro:
-        cmd.append('-a');
-        cmd.append("{}{}".format(macroFileName,AllMacro[idServer]));
+        cmd.append('-a')
+        cmd.append("{}{}".format(macroFileName,AllMacro[idServer]))
     roll = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    my_timer = Timer(5, roll.kill)
     try:
-        my_timer.start()
-        stdout, stderr = roll.communicate()
+        stdout, stderr = roll.communicate(timeout=5)
         rc = roll.returncode
         if (rc == 0):
             logger.info("cmd: "+str(command))
@@ -343,12 +342,11 @@ async def rollDice(command,message,bot):
         logger.error(type(inst))    # the exception instance
         logger.error(inst)          # __str__ allows args to be printed directly,
         logger.error("OSError error: "+str(sys.exc_info()[0])+" command:"+str(command))
-        #await client.send_message(message.channel, "Error: your command took too much time")
+    except subprocess.TimeoutExpired:
+        await message.channel.send("Error: your command took too much time")
     except:
         msgError = sys.exc_info()
         logger.error("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" command:"+str(command))
-    finally:
-        my_timer.cancel()
 
 async def manageSupport(message, bot):
     await message.channel.send("You want to help ? Go to:\n https://liberapay.com/obiwankennedy/donate \nor\n https://www.patreon.com/rolisteam \nor\n https://www.twitch.tv/rolisteam to support my development")
