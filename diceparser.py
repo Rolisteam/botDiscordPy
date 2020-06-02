@@ -1,4 +1,4 @@
-#!/usr/bin/python3.6
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import discord
@@ -18,6 +18,8 @@ import sys
 import os.path
 import configparser
 from database import DataRetriver
+import tempfile
+from database import helper
 
 import dbl
 from discord.ext import commands
@@ -31,9 +33,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("shard_id", help="current proccess shard_id",type=int)
 parser.add_argument("-c","--shardCount", help="max shard", type=int)
 args = parser.parse_args()
-
+Testing=True
 current_shard_id=args.shard_id
 shardCount = args.shardCount
+discordMsgLimit=2500
 #shardCount= 3
 
 print(str(current_shard_id)+" "+str(shardCount));
@@ -46,9 +49,10 @@ handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(me
 logger.addHandler(handler)
 
 secs=3600*24
-pwd="/home/renaud/application/mine/discord-python/"
+pwd="/home/renaud/application/mine/discord-python_dev/"
 description = '''DiceParser provides a complete system to run dice commands.'''
-my_bot = Bot(shard_id=current_shard_id,shard_count=shardCount,command_prefix='')
+client = discord.AutoShardedClient(shard_count=shardCount)
+#Bot(shard_id=current_shard_id,shard_count=shardCount,command_prefix='')
 #(command_prefix='',description=description,shard_id=0,shard_count=1)
 
 msgCounter=100
@@ -109,6 +113,7 @@ async def sendImageMessage(bot,message,data):
 
 async def manageMacro(message,textmsg,bot):
     global database
+    global discordMsgLimit
     idServer=str(message.guild.id)
     macroRegExp=False
     addMacro=False
@@ -162,6 +167,11 @@ async def manageMacro(message,textmsg,bot):
 
     if(addMacro):
         database.addMacro(idServer, macroName,macroCmd,macroRegExp,"")
+        count=database.lineAffected()
+        if(count == 1):
+            await message.channel.send("Macro has been added!")
+        else:
+            await message.channel.send("Faillure: Macro can't be added!")
         #macros.append(macro)
 
     if(showlistMacro):
@@ -173,13 +183,21 @@ async def manageMacro(message,textmsg,bot):
             id+=1
         lines+="```"
         if(id>0):
-            await message.channel.send(lines)
+            if(len(lines)<discordMsgLimit):
+                await message.channel.send(lines)
+            else:
+                await message.channel.send(lines[:2500])
         else:
             await message.channel.send("No recorded macro for this server")
 
     if(removeMacro):
         try:
             database.removeMacro(idServer,int(idToRemove))
+            count=database.lineAffected()
+            if(count == 1):
+                await message.channel.send("Macro has been removed!")
+            else:
+                await message.channel.send("Faillure: Macro can't be removed!")
         except IndexError:
             await message.channel.send("Error in your remove Macro Command")
 
@@ -222,16 +240,13 @@ async def manageAlias(message,textmsg,bot):
         firstLine=False
 
     if(showlistAlias):
-        val = database.showAlias(idServer)
+        alias=json.loads(database.showAlias(idServer, -1))
         lines="```"
         id = 0
-        for i in val:
+        for i in alias:
             if len(i) == 0:
                 return
-            cmds=val[i]
-            print(cmds)
-
-            lines+="id: {} Pattern: {}\nCommand:\n{}\n\n".format(id,i,"\n".join(cmds))
+            lines+="id: {} Pattern: {}\nCommand:\n{}\n\n".format(id,i['pattern'],i['cmds'])
             id+=1
         lines+="```"
         if(id>0):
@@ -243,9 +258,19 @@ async def manageAlias(message,textmsg,bot):
     #if( idServer not in AllAliases):
     #    AllAliases.update({str(idServer):{}})
     if(addAlias):
-        database.addAlias(idServer,str(aliasName),commands)
+        database.addAlias(idServer,str(aliasName),'\n'.join(commands))
+        count=database.lineAffected()
+        if(count == 1):
+            await message.channel.send("Alias has been removed!")
+        else:
+            await message.channel.send("Faillure: Alias can't be removed!")
     elif(removeAlias):
         database.removeAlias(idServer,aliasName)
+        count=database.lineAffected()
+        if(count == 1):
+            await message.channel.send("Alias has been removed!")
+        else:
+            await message.channel.send("Faillure: Alias can't be removed!")
 
 
 async def rollDice(command,message,bot):
@@ -254,9 +279,7 @@ async def rollDice(command,message,bot):
     logger = logging.getLogger('discord')
     kill = lambda process: process.kill()
     macros=database.getJsonMacro(idServer)
-    cmd = ['dice','-b',command]
-    cmd.append('--alias-data')
-    cmd.append("{}".format(macros))
+    cmd = ['xvfb-run','dice','--alias-data',"{}".format(macros),'-b',command]
     print(cmd)
     roll = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     my_timer = Timer(5, roll.kill)
@@ -279,7 +302,7 @@ async def rollDice(command,message,bot):
         logger.info(type(inst))    # the exception instance
         logger.info(inst)          # __str__ allows args to be printed directly,
         logger.info("OSError error: "+str(sys.exc_info()[0])+" cmd:"+str(command))
-        #await my_bot.send_message(message.channel, "Error: your command took too much time")
+        #await client.send_message(message.channel, "Error: your command took too much time")
     except:
         msgError = sys.exc_info()
         logger.info("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" cmd:"+str(command))
@@ -287,38 +310,38 @@ async def rollDice(command,message,bot):
         my_timer.cancel()
 
 async def manageSupport(message, bot):
-    await message.channel.send("You want to help ? Go to:\n https://liberapay.com/obiwankennedy/donate \nor\n https://www.twitch.tv/rolisteam and support my development")
+    await message.channel.send("You want to help ? Go to:\n https://liberapay.com/obiwankennedy/donate \nor\n https://www.patreon.com/rolisteam \nor\n https://www.twitch.tv/rolisteam to support my development")
 
 async def manageVote(message, bot):
     await message.channel.send("Vote for Diceparser! go to: https://discordbots.org/bot/279722369260453888/vote")
 ## Callback
-@my_bot.event
+@client.event
 async def on_ready():
     print('Logged in as')
-    print(my_bot.user.name)
-    print(my_bot.user.id)
+    print(client.user.name)
+    print(client.user.id)
     print('------')
     print('id: {} count: {}'.format(current_shard_id,shardCount))
     game = discord.Game("!support !help !vote")
-    await my_bot.change_presence(status=discord.Status.idle, activity=game)
+    await client.change_presence(status=discord.Status.idle, activity=game)
+    if not Testing:
+        api.setup(client)
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
 
-    api.setup(my_bot, current_shard_id, shardCount)
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
-
-@my_bot.event
+@client.event
 async def on_read():
     print("Client logged in")
 
-@my_bot.event
+@client.event
 async def on_server_join(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
 
-@my_bot.event
+@client.event
 async def on_server_remove(server):
-    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(my_bot.guilds))))
+    logger.info("#### Server count (shard "+str(current_shard_id)+"): "+str(len(list(client.guilds))))
 
 
-@my_bot.event
+@client.event
 async def on_message(message):
     global database
     logger = logging.getLogger('discord')
@@ -327,49 +350,52 @@ async def on_message(message):
         idServer = str(message.guild.id)
         prefix = getPrefix(idServer)
         textmsg = message.content
-        if textmsg.startswith(prefix) and message.author != my_bot.user:
+        if textmsg.startswith(prefix) and message.author != client.user:
             textmsg= textmsg[len(prefix):].strip()
             if textmsg.startswith('play') or textmsg.startswith('skip') or textmsg.startswith('stop'):
                         return
-            if textmsg.startswith('alias'):
+            elif textmsg.startswith('alias'):
                 logger.info("alias")
-                await manageAlias(message,textmsg,my_bot)
-            if textmsg.startswith('macro'):
+                await manageAlias(message,textmsg,client)
+            elif textmsg.startswith('macro'):
                 logger.info("macro")
-                await manageMacro(message,textmsg,my_bot)
-            if textmsg.startswith('support'):
+                await manageMacro(message,textmsg,client)
+            elif textmsg.startswith('support'):
                 logger.info("Support asked")
-                await manageSupport(message, my_bot)
-            if textmsg.startswith('vote'):
+                await manageSupport(message, client)
+            elif textmsg.startswith('vote'):
                 logger.info("vote asked")
-                await manageVote(message, my_bot)
-            if textmsg.startswith('prefix'):
+                await manageVote(message, client)
+            elif textmsg.startswith('prefix'):
                 logger.info("Confix prefix")
-                await managePrefix(idServer,textmsg,message,my_bot)
+                await managePrefix(idServer,textmsg,message,client)
             else:
                 command = textmsg
                 normalCmd=True
                 cmds=database.getAliases(idServer, command)
                 if(cmds == None):
-                    await rollDice(command,message,my_bot)
+                    await rollDice(command,message,client)
                 else:
                     for line in cmds:
                         if(line.startswith('!')):
                             line = line[1:]
                         logger.info("Saved Command: "+line)
                         normalCmd=False
-                        await rollDice(line,message,my_bot)
+                        await rollDice(line,message,client)
 
 
 
 #Prod
 #try:
-#my_bot.run(config['DEFAULT']['PKEY'])
-my_bot.run(config['DEFAULT']['PKEY_DEV'])
+if Testing:
+    client.run(config['DEFAULT']['PKEY_DEV'])
+else:
+    client.run(config['DEFAULT']['PKEY'])
+
 #except:
 #    msgError = sys.exc_info()
 #    logger.info("Unexpected error:"+str(msgError[0])+""+str(msgError[1])+""+str(msgError[2])+" cmd:"+str(command))
 
 
 #Debug
-#my_bot.run("")
+#client.run("")

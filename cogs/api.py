@@ -7,7 +7,7 @@ import asyncio
 import logging
 
 
-class DiscordBotsOrgAPI:
+class DiscordBotsOrgAPI(commands.Cog):
     """Handles interactions with the discordbots.org API"""
 
     def __init__(self, bot, shardId, shardCount):
@@ -25,8 +25,8 @@ class DiscordBotsOrgAPI:
             logger.info('attempting to post server count')
             try:
                 await self.dblpy.post_server_count(self.shardCount, self.shardId)
-                logger.info('posted server count ({})'.format(self.dblpy.guild_count()))
-                logger.info('shardCount:{} shardId: {}'.format(self.shardCount,self.shardId))
+                #logger.info('posted server count ({})'.format(self.bot.guilds()))
+                #logger.info('shardCount:{} shardId: {}'.format(self.shardCount,self.shardId))
             except Exception as e:
                 logger.exception('Failed to post server count\n{}: {}'.format(type(e).__name__, e))
             await asyncio.sleep(1800)
@@ -35,4 +35,4 @@ class DiscordBotsOrgAPI:
 def setup(bot, shardId, shardCount):
     global logger
     logger = logging.getLogger('bot')
-    bot.add_cog(DiscordBotsOrgAPI(bot, shardId, shardCount))
+    bot.add_cog(DiscordBotsOrgAPI(bot))
